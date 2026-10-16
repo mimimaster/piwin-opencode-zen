@@ -1,0 +1,7 @@
+{
+  "modelProvider": {
+    "id": "opencode-zen",
+    "name": "OpenCode Zen (experimental free tier)",
+    "auth": "none"
+  }
+}

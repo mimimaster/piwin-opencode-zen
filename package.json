@@ -1,0 +1,21 @@
+{
+  "name": "piwin-opencode-zen",
+  "version": "0.1.0",
+  "description": "Independent experimental OpenCode Zen model provider for piwin",
+  "type": "module",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/mimimaster/piwin-opencode-zen.git" },
+  "homepage": "https://github.com/mimimaster/piwin-opencode-zen#readme",
+  "engines": { "node": ">=22.19.0" },
+  "pi": { "extensions": ["./index.ts"] },
+  "files": ["index.ts", "src", "piwin.json", "README.md", "LICENSE", "test", "scripts"],
+  "scripts": {
+    "test": "node --import ./test/host-peers.mjs --test test/*.test.mjs",
+    "typecheck": "node scripts/typecheck.mjs"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "^0.84.2",
+    "@earendil-works/pi-coding-agent": "^0.84.2"
+  },
+  "devDependencies": { "@types/node": "^22.10.5", "typescript": "^5.7.3" }
+}
