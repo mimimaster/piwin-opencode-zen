@@ -25,7 +25,7 @@ if (sourceRoot) {
     options.paths[name] = [resolve(installedRoot, typePath)];
   }
 }
-const program = ts.createProgram(['index.ts', 'src/index.js', 'src/zen-request.js', 'src/zen-stream.js'].map((path) => resolve(packageRoot, path)), options);
+const program = ts.createProgram(['index.ts', 'src/index.js', 'src/zen-request.js', 'src/zen-stream.js', 'src/zen-catalog.js'].map((path) => resolve(packageRoot, path)), options);
 const diagnostics = ts.getPreEmitDiagnostics(program);
 if (diagnostics.length) {
   console.error(ts.formatDiagnosticsWithColorAndContext(diagnostics, { getCanonicalFileName: (path) => path, getCurrentDirectory: () => packageRoot, getNewLine: () => '\n' }));
