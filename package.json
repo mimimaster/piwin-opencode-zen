@@ -1,6 +1,6 @@
 {
   "name": "piwin-opencode-zen",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Independent experimental OpenCode Zen model provider for piwin",
   "type": "module",
   "license": "MIT",

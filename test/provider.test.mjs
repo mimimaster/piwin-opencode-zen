@@ -7,14 +7,22 @@ import { fileURLToPath } from 'node:url';
 import { ModelRuntime, DefaultResourceLoader } from '@earendil-works/pi-coding-agent';
 import { Type, getApiProvider } from '@earendil-works/pi-ai/compat';
 import registerZen from '../src/index.js';
+import { catalogFetch } from './catalog-fixture.mjs';
 const roots = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
 const context = () => ({ messages: [{ role: 'user', content: 'hello', timestamp: Date.now() }] });
 async function setup() {
   const root = await mkdtemp(join(tmpdir(), 'piwin-zen-offline-')); roots.push(root);
-  const runtime = await ModelRuntime.create({ authPath: join(root, 'auth.json'), modelsPath: null, allowModelNetwork: false });
+  const runtime = await ModelRuntime.create({ authPath: join(root, 'auth.json'), modelsPath: join(root, 'models.json'), allowModelNetwork: false });
   registerZen({ registerProvider: runtime.registerProvider.bind(runtime) });
-  const model = runtime.getModel('opencode-zen', 'cat-jam-free');
+  assert.deepEqual(runtime.getModels('opencode-zen'), []);
+  await runtime.refresh({ providers: ['opencode-zen'], allowNetwork: false });
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = catalogFetch;
+    await runtime.refresh({ providers: ['opencode-zen'], allowNetwork: true });
+  } finally { globalThis.fetch = previousFetch; }
+  const model = runtime.getModel('opencode-zen', 'future-free');
   assert.ok(model);
   return { root, runtime, model };
 }
@@ -22,7 +30,7 @@ function response({ tool, errorStatus } = {}) {
   if (errorStatus) return new Response(JSON.stringify({ error: { message: errorStatus === 429 ? 'quota exhausted' : 'RegionError: served-region required', type: 'upstream_error' } }), { status: errorStatus, headers: { 'content-type': 'application/json' } });
   const first = tool ? { role: 'assistant', tool_calls: [{ index: 0, id: 'call_read', type: 'function', function: { name: tool, arguments: '{"path":"README.md"}' } }] } : { role: 'assistant', content: 'hello' };
   const events = [
-    { id: 'fixture', object: 'chat.completion.chunk', model: 'cat-jam-free', choices: [{ index: 0, delta: first, finish_reason: null }] },
+    { id: 'fixture', object: 'chat.completion.chunk', model: 'future-free', choices: [{ index: 0, delta: first, finish_reason: null }] },
     { id: 'fixture', choices: [{ index: 0, delta: {}, finish_reason: tool ? 'tool_calls' : 'stop' }], usage: { prompt_tokens: 3, completion_tokens: 5, total_tokens: 8 } },
   ];
   return new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('') + 'data: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream' } });
@@ -31,7 +39,7 @@ function response({ tool, errorStatus } = {}) {
 test('real Pi loader reads the package entry and registration does not replace builtin API', async () => {
   const before = getApiProvider('openai-completions');
   const { root, runtime, model } = await setup();
-  assert.equal(runtime.getModels('opencode-zen').length, 3);
+  assert.equal(runtime.getModels('opencode-zen').length, 1);
   assert.equal(model.api, 'piwin-opencode-zen-api');
   assert.equal(getApiProvider('openai-completions'), before);
   const loader = new DefaultResourceLoader({ cwd: root, agentDir: root, noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true, additionalExtensionPaths: [fileURLToPath(new URL('../', import.meta.url))] });
@@ -105,4 +113,27 @@ test('native transport forwards cancellation', async () => {
     },
   });
   assert.equal(result.stopReason, 'aborted');
+});
+
+test('a failed live refresh clears the previous catalog and its stored session snapshot', async () => {
+  const { root, runtime } = await setup();
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response('unavailable', { status: 503 });
+    await runtime.refresh({ providers: ['opencode-zen'], allowNetwork: true });
+  } finally { globalThis.fetch = previousFetch; }
+  assert.deepEqual(runtime.getModels('opencode-zen'), []);
+  const restored = await ModelRuntime.create({ authPath: join(root, 'auth.json'), modelsPath: join(root, 'models.json'), allowModelNetwork: false });
+  registerZen({ registerProvider: restored.registerProvider.bind(restored) });
+  await restored.refresh({ providers: ['opencode-zen'], allowNetwork: false });
+  assert.deepEqual(restored.getModels('opencode-zen'), []);
+});
+
+test('a second session restores only the catalog actually fetched by the Host', async () => {
+  const { root } = await setup();
+  const restored = await ModelRuntime.create({ authPath: join(root, 'auth.json'), modelsPath: join(root, 'models.json'), allowModelNetwork: false });
+  registerZen({ registerProvider: restored.registerProvider.bind(restored) });
+  await restored.refresh({ providers: ['opencode-zen'], allowNetwork: false });
+  assert.equal(restored.getModels('opencode-zen').length, 1);
+  assert.equal(restored.getModel('opencode-zen', 'future-free').contextWindow, 123456);
 });
